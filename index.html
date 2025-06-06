@@ -15,33 +15,76 @@
     body {
       font-family: sans-serif;
       margin: 0;
-      padding: 0; /* Ensure no body padding */
+      padding: 0;
       background-color: #f9f9f9;
-      text-align: center;
+      /* text-align: center; /* Removed as container handles its own centering */
     }
-
-    /* Old #pdfViewer styles removed */
 
     #pdfViewerContainer {
       width: 100%;
-      max-width: 800px; /* Or your preferred max width */
-      margin: 10px auto; /* Centering */
+      max-width: 900px; /* Increased max-width slightly */
+      margin: 20px auto; /* More margin for better centering on page */
       border: 1px solid #ccc;
-      text-align: center; /* Center controls */
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15); /* Enhanced shadow */
+      /* text-align: center; /* Removed as flexbox in controls and canvas margin handle centering */
+      overflow: hidden; /* Ensure shadow doesn't get cut by canvas content */
+      border-radius: 4px; /* Optional: rounded corners for the container */
     }
+
     #pdfControls {
-      padding: 10px;
-      background-color: #f0f0f0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      background-color: #e9e9e9;
+      border-bottom: 1px solid #ccc; /* Add a bottom border to separate from canvas */
     }
+
     #pdfControls button {
-      padding: 5px 10px;
+      padding: 6px 12px;
       margin: 0 5px;
+      border: 1px solid #bbb;
+      border-radius: 4px;
+      background-color: #fff;
+      color: #333;
+      cursor: pointer;
+      font-size: 0.9em;
+      transition: background-color 0.2s ease, border-color 0.2s ease;
     }
+    #pdfControls button:hover {
+      background-color: #f0f0f0;
+      border-color: #999;
+    }
+    #pdfControls button:active {
+      background-color: #e0e0e0;
+    }
+
+    #pageIndicator {
+      font-size: 0.9em;
+      color: #333;
+      margin: 0 10px; /* Add some margin to separate from buttons */
+    }
+
     #pdfCanvas {
-      width: 100%; /* Canvas will be sized by JS based on PDF page */
-      border-top: 1px solid #ccc;
-      display: block; /* Remove extra space below canvas */
-      margin: 0 auto; /* Center canvas if its CSS width is less than container */
+      width: 100%;
+      display: block;
+      margin: 0 auto;
+      /* border-top: 1px solid #ccc; /* Remove, as #pdfControls now has border-bottom */
+    }
+
+    @media (max-width: 480px) {
+      #pdfControls {
+        flex-direction: column;
+        padding: 10px;
+      }
+      #pdfControls button {
+        width: 70%; /* Make buttons wider */
+        margin: 5px 0; /* Add vertical margin */
+        padding: 8px 12px; /* Slightly larger tap targets */
+      }
+      #pageIndicator {
+        margin: 8px 0; /* Adjust margin for column layout */
+      }
     }
   </style>
 </head>
@@ -66,6 +109,13 @@
     const scale = 1.5; // Adjust as needed, or make dynamic
     const canvas = document.getElementById('pdfCanvas');
     const ctx = canvas.getContext('2d');
+
+    let touchstartX = 0;
+    let touchendX = 0;
+    let touchstartY = 0;
+    let touchendY = 0;
+    const minHorizontalSwipeDistance = 50; // Minimum pixels for a horizontal swipe
+    const maxVerticalSwipeDistance = 75;  // Maximum vertical travel for it to still be considered a horizontal swipe
 
     const pageNumDisplay = document.getElementById('page_num');
     const pageCountDisplay = document.getElementById('page_count');
@@ -147,6 +197,38 @@
 
     document.getElementById('prevPage').addEventListener('click', onPrevPage);
     document.getElementById('nextPage').addEventListener('click', onNextPage);
+
+    function handleSwipe() {
+      const deltaX = touchendX - touchstartX;
+      const deltaY = touchendY - touchstartY;
+
+      // Check if it's a predominantly horizontal swipe and vertical travel is within limits
+      if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > minHorizontalSwipeDistance && Math.abs(deltaY) < maxVerticalSwipeDistance) {
+        if (deltaX < 0) { // Swiped left (finger moved from right to left)
+          onNextPage();
+        } else { // Swiped right (finger moved from left to right)
+          onPrevPage();
+        }
+      }
+    }
+
+    canvas.addEventListener('touchstart', function(event) {
+      touchstartX = event.changedTouches[0].screenX;
+      touchstartY = event.changedTouches[0].screenY;
+    }, false);
+
+    canvas.addEventListener('touchmove', function(event) {
+      // If a horizontal swipe is potentially starting (more horizontal movement than vertical)
+      if (Math.abs(event.changedTouches[0].screenX - touchstartX) > Math.abs(event.changedTouches[0].screenY - touchstartY)) {
+        event.preventDefault();
+      }
+    }, { passive: false }); // passive: false is needed for preventDefault to work in touchmove
+
+    canvas.addEventListener('touchend', function(event) {
+      touchendX = event.changedTouches[0].screenX;
+      touchendY = event.changedTouches[0].screenY;
+      handleSwipe();
+    }, false);
   </script>
 </body>
 </html>
