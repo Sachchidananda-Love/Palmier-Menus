@@ -4,80 +4,149 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Daily PDF Switcher</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+  <script>
+    // Set worker source for PDF.js
+    if (typeof pdfjsLib !== 'undefined') {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+    }
+  </script>
   <style>
     body {
       font-family: sans-serif;
       margin: 0;
-      padding: 20px;
+      padding: 0; /* Ensure no body padding */
       background-color: #f9f9f9;
       text-align: center;
     }
 
-    h1 {
-      font-size: 1.5rem;
-    }
+    /* Old #pdfViewer styles removed */
 
-    .button-container {
-      margin: 10px 0;
-    }
-
-    button {
-      font-size: 1rem;
-      padding: 10px 20px;
-      margin: 5px;
-      border: none;
-      border-radius: 5px;
-      background-color: #007BFF;
-      color: white;
-      cursor: pointer;
-    }
-
-    button:hover {
-      background-color: #0056b3;
-    }
-
-    iframe {
+    #pdfViewerContainer {
       width: 100%;
-      height: 75vh;
-      border: none;
-      margin-top: 15px;
+      max-width: 800px; /* Or your preferred max width */
+      margin: 10px auto; /* Centering */
+      border: 1px solid #ccc;
+      text-align: center; /* Center controls */
     }
-
-    @media (max-width: 600px) {
-      button {
-        width: 80%;
-        font-size: 1.2rem;
-      }
+    #pdfControls {
+      padding: 10px;
+      background-color: #f0f0f0;
+    }
+    #pdfControls button {
+      padding: 5px 10px;
+      margin: 0 5px;
+    }
+    #pdfCanvas {
+      width: 100%; /* Canvas will be sized by JS based on PDF page */
+      border-top: 1px solid #ccc;
+      display: block; /* Remove extra space below canvas */
+      margin: 0 auto; /* Center canvas if its CSS width is less than container */
     }
   </style>
 </head>
 <body>
-  <h1>Daily PDF Switcher</h1>
-
-  <div class="button-container">
-    <button onclick="showPDF('morning')">Show Morning PDF</button>
-    <button onclick="showPDF('evening')">Show Evening PDF</button>
+  <div id="pdfViewerContainer">
+    <div id="pdfControls">
+      <button id="prevPage">Previous</button>
+      <span id="pageIndicator">Page <span id="page_num">0</span> / <span id="page_count">0</span></span>
+      <button id="nextPage">Next</button>
+    </div>
+    <canvas id="pdfCanvas"></canvas>
   </div>
-
-  <iframe id="pdfViewer"></iframe>
 
   <script>
     const morningPDF = "morning.pdf";
     const eveningPDF = "evening.pdf";
 
-    const viewer = document.getElementById("pdfViewer");
+    let pdfDoc = null;
+    let pageNum = 1;
+    let pageRendering = false;
+    let pageNumPending = null;
+    const scale = 1.5; // Adjust as needed, or make dynamic
+    const canvas = document.getElementById('pdfCanvas');
+    const ctx = canvas.getContext('2d');
 
-    function autoSetPDF() {
-      const now = new Date();
-      const hours = now.getHours();
-      viewer.src = (hours < 17) ? morningPDF : eveningPDF;
+    const pageNumDisplay = document.getElementById('page_num');
+    const pageCountDisplay = document.getElementById('page_count');
+
+    function renderPage(num) {
+      pageRendering = true;
+      // Using promise to fetch the page
+      pdfDoc.getPage(num).then(function(page) {
+        const viewport = page.getViewport({scale: scale});
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+
+        // Render PDF page into canvas context
+        const renderContext = {
+          canvasContext: ctx,
+          viewport: viewport
+        };
+        const renderTask = page.render(renderContext);
+
+        // Wait for rendering to finish
+        renderTask.promise.then(function() {
+          pageRendering = false;
+          if (pageNumPending !== null) {
+            // New page rendering is pending
+            renderPage(pageNumPending);
+            pageNumPending = null;
+          }
+        });
+      });
+
+      // Update page counters
+      pageNumDisplay.textContent = num;
     }
 
-    function showPDF(which) {
-      viewer.src = (which === "morning") ? morningPDF : eveningPDF;
+    function queueRenderPage(num) {
+      if (pageRendering) {
+        pageNumPending = num;
+      } else {
+        renderPage(num);
+      }
     }
 
-    autoSetPDF();
+    function showPDF(pdfUrl) {
+      console.log(`Loading PDF: ${pdfUrl}`); // For debugging
+      if (typeof pdfjsLib === 'undefined') {
+        console.error("PDF.js library is not loaded.");
+        alert("Error: PDF.js library failed to load. Cannot display PDF.");
+        return;
+      }
+      pdfjsLib.getDocument(pdfUrl).promise.then(function(pdfDoc_) {
+        pdfDoc = pdfDoc_;
+        pageCountDisplay.textContent = pdfDoc.numPages;
+        pageNum = 1; // Reset to first page
+        renderPage(pageNum);
+      }).catch(function(error) {
+        console.error('Error loading PDF: ' + error);
+        alert('Error loading PDF: ' + error.message + (error.name ? ' ('+error.name+')' : '') + (error.status ? ' Status: '+error.status : ''));
+      });
+    }
+
+    // Load initial PDF (e.g., morning.pdf)
+    showPDF(morningPDF);
+
+    function onPrevPage() {
+      if (pdfDoc === null || pageNum <= 1) {
+        return; // No PDF loaded or already on the first page
+      }
+      pageNum--;
+      queueRenderPage(pageNum);
+    }
+
+    function onNextPage() {
+      if (pdfDoc === null || pageNum >= pdfDoc.numPages) {
+        return; // No PDF loaded or already on the last page
+      }
+      pageNum++;
+      queueRenderPage(pageNum);
+    }
+
+    document.getElementById('prevPage').addEventListener('click', onPrevPage);
+    document.getElementById('nextPage').addEventListener('click', onNextPage);
   </script>
 </body>
 </html>
