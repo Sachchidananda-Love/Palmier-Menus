@@ -114,6 +114,7 @@
     let touchendY = 0;
     const minHorizontalSwipeDistance = 50; // Minimum pixels for a horizontal swipe
     const maxVerticalSwipeDistance = 75;  // Maximum vertical travel for it to still be considered a horizontal swipe
+    let isSingleTouchSwipe = false;
 
     const pageNumDisplay = document.getElementById('page_num');
     const pageCountDisplay = document.getElementById('page_count');
@@ -211,21 +212,40 @@
     }
 
     canvas.addEventListener('touchstart', function(event) {
-      touchstartX = event.changedTouches[0].screenX;
-      touchstartY = event.changedTouches[0].screenY;
+      if (event.touches.length === 1) {
+        touchstartX = event.changedTouches[0].screenX;
+        touchstartY = event.changedTouches[0].screenY;
+        isSingleTouchSwipe = true; // Potential single-finger swipe starts
+      } else {
+        isSingleTouchSwipe = false; // Multi-touch, not a swipe for page navigation
+      }
     }, false);
 
     canvas.addEventListener('touchmove', function(event) {
-      // If a horizontal swipe is potentially starting (more horizontal movement than vertical)
-      if (Math.abs(event.changedTouches[0].screenX - touchstartX) > Math.abs(event.changedTouches[0].screenY - touchstartY)) {
+      if (!isSingleTouchSwipe || event.touches.length !== 1) {
+        // Not a valid single-touch swipe scenario (either started multi-touch or became multi-touch)
+        // Allow default behavior like pinch-zoom by not calling preventDefault()
+        isSingleTouchSwipe = false; // Ensure flag is false if it became multi-touch
+        return;
+      }
+
+      // If it's a valid single-touch swipe, check for horizontal movement to prevent scroll
+      const currentX = event.changedTouches[0].screenX;
+      const currentY = event.changedTouches[0].screenY;
+      if (Math.abs(currentX - touchstartX) > Math.abs(currentY - touchstartY)) {
+        // Predominantly horizontal movement
         event.preventDefault();
       }
-    }, { passive: false }); // passive: false is needed for preventDefault to work in touchmove
+    }, { passive: false });
 
     canvas.addEventListener('touchend', function(event) {
-      touchendX = event.changedTouches[0].screenX;
-      touchendY = event.changedTouches[0].screenY;
-      handleSwipe();
+      if (isSingleTouchSwipe && event.changedTouches.length === 1) {
+        touchendX = event.changedTouches[0].screenX;
+        touchendY = event.changedTouches[0].screenY;
+        handleSwipe(); // Process the potential swipe
+      }
+      // Reset the flag after every touchend, regardless of whether a swipe was handled
+      isSingleTouchSwipe = false;
     }, false);
   </script>
 </body>
